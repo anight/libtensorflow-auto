@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/anight/gpu-monitoring-tools/bindings/go/nvml"
 	"github.com/intel-go/cpuid"
 	"log"
 	"os"
@@ -49,8 +50,62 @@ func getLibtensorflowCpuSuffix() string {
 	panic("what a funny cpu you have")
 }
 
+func haveLibtensorflowGpuSo() bool {
+	so := fmt.Sprintf("%v/libtensorflow_gpu.so", tensorflow_root)
+	_, err := os.Stat(so)
+	if err == nil {
+		return true
+	} else {
+		os.Stderr.WriteString(fmt.Sprintf("%v\n", err))
+		return false
+	}
+}
+
+func haveAtLeastOneGPU() bool {
+	nvml.Init()
+	defer nvml.Shutdown()
+
+	count, err := nvml.GetDeviceCount()
+	if err != nil {
+		os.Stderr.WriteString(fmt.Sprintf("nvml.GetDeviceCount() failed: %v\n", err))
+		return false
+	}
+
+	driverVersion, err := nvml.GetDriverVersion()
+	if err != nil {
+		os.Stderr.WriteString(fmt.Sprintf("nvml.GetDriverVersion() failed: %v\n", err))
+		return false
+	}
+
+	os.Stderr.WriteString(fmt.Sprintf("Nvidia driver version: %v\n", driverVersion))
+
+	for i := uint(0); i < count; i++ {
+		device, err := nvml.NewDevice(i)
+		if err != nil {
+			log.Fatalf("Error getting device %d: %v\n", i, err)
+		}
+
+		os.Stderr.WriteString(fmt.Sprintf("GPU %v: Path: %v, Model: %v, UUID: %v, CudaComputeCapability: %v.%v\n",
+			i, device.Path, *device.Model, device.UUID, device.CudaComputeCapability.Major, device.CudaComputeCapability.Minor))
+	}
+
+	if count > 0 {
+		return true
+	} else {
+		os.Stderr.WriteString(fmt.Sprintf("No nvidia gpu(s) detected\n"))
+		return false
+	}
+}
+
 func generateLdPreload(existingLdPreload string) string {
-	lib := fmt.Sprintf("LD_PRELOAD=%v/libtensorflow_cpu_%v.so", tensorflow_root, getLibtensorflowCpuSuffix())
+	var lib string
+	if haveAtLeastOneGPU() && haveLibtensorflowGpuSo() {
+		// XXX: With libtensorflow_gpu.so we don't do cpu features matching for now
+		// XXX: With libtensorflow_gpu.so we don't do gpu cuda capabilities matching for now
+		lib = fmt.Sprintf("LD_PRELOAD=%v/libtensorflow_gpu.so", tensorflow_root)
+	} else {
+		lib = fmt.Sprintf("LD_PRELOAD=%v/libtensorflow_cpu_%v.so", tensorflow_root, getLibtensorflowCpuSuffix())
+	}
 	if existingLdPreload != "" {
 		lib += fmt.Sprintf(":%v", existingLdPreload)
 	}
@@ -95,7 +150,9 @@ func main() {
 
 	args := os.Args[1:]
 
-	os.Stderr.WriteString(fmt.Sprintf("Executing with %v\n", ldPreload))
+	os.Stderr.WriteString(fmt.Sprintf("Setting %v\n", ldPreload))
+
+	os.Stderr.WriteString(fmt.Sprintf("Executing %v\n", args))
 
 	err := syscall.Exec(binary, args, env)
 	if err != nil {
