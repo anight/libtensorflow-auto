@@ -62,7 +62,10 @@ func haveLibtensorflowGpuSo() bool {
 }
 
 func haveAtLeastOneGPU() bool {
-	nvml.Init()
+	if err := nvml.Init(); err != nil {
+		os.Stderr.WriteString(fmt.Sprintf("nvml.Init() failed: %v\n", err))
+		return false
+	}
 	defer nvml.Shutdown()
 
 	count, err := nvml.GetDeviceCount()
