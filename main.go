@@ -60,23 +60,23 @@ func haveLibtensorflowGpuSo() bool {
 	}
 }
 
-func haveAtLeastOneGPU() bool {
+func listGPUs() (ret []*nvml.Device) {
 	if err := nvml.Init(); err != nil {
 		fmt.Fprintf(os.Stderr, "nvml.Init() failed: %v\n", err)
-		return false
+		return
 	}
 	defer nvml.Shutdown()
 
 	count, err := nvml.GetDeviceCount()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "nvml.GetDeviceCount() failed: %v\n", err)
-		return false
+		return
 	}
 
 	driverVersion, err := nvml.GetDriverVersion()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "nvml.GetDriverVersion() failed: %v\n", err)
-		return false
+		return
 	}
 
 	fmt.Fprintf(os.Stderr, "Nvidia driver version: %v\n", driverVersion)
@@ -88,21 +88,22 @@ func haveAtLeastOneGPU() bool {
 			os.Exit(1)
 		}
 
+		ret = append(ret, device)
+
 		fmt.Fprintf(os.Stderr, "GPU %v: Path: %v, Model: %v, UUID: %v, CudaComputeCapability: %v.%v\n",
 			i, device.Path, *device.Model, device.UUID, device.CudaComputeCapability.Major, device.CudaComputeCapability.Minor)
 	}
 
-	if count > 0 {
-		return true
-	} else {
+	if count == 0 {
 		fmt.Fprintf(os.Stderr, "No nvidia gpu(s) detected\n")
-		return false
 	}
+
+	return
 }
 
 func generateLdPreload(existingLdPreload string) string {
 	var lib string
-	if haveAtLeastOneGPU() && haveLibtensorflowGpuSo() {
+	if len(listGPUs()) > 0 && haveLibtensorflowGpuSo() {
 		// XXX: With libtensorflow_gpu.so we don't do cpu features matching for now
 		// XXX: With libtensorflow_gpu.so we don't do gpu cuda capabilities matching for now
 		lib = fmt.Sprintf("LD_PRELOAD=%v/libtensorflow_gpu.so", tensorflow_root)
