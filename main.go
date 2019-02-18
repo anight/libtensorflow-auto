@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/anight/gpu-monitoring-tools/bindings/go/nvml"
 	"github.com/intel-go/cpuid"
-	"log"
 	"os"
 	"os/exec"
 	"path"
@@ -56,46 +55,47 @@ func haveLibtensorflowGpuSo() bool {
 	if err == nil {
 		return true
 	} else {
-		os.Stderr.WriteString(fmt.Sprintf("%v\n", err))
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return false
 	}
 }
 
 func haveAtLeastOneGPU() bool {
 	if err := nvml.Init(); err != nil {
-		os.Stderr.WriteString(fmt.Sprintf("nvml.Init() failed: %v\n", err))
+		fmt.Fprintf(os.Stderr, "nvml.Init() failed: %v\n", err)
 		return false
 	}
 	defer nvml.Shutdown()
 
 	count, err := nvml.GetDeviceCount()
 	if err != nil {
-		os.Stderr.WriteString(fmt.Sprintf("nvml.GetDeviceCount() failed: %v\n", err))
+		fmt.Fprintf(os.Stderr, "nvml.GetDeviceCount() failed: %v\n", err)
 		return false
 	}
 
 	driverVersion, err := nvml.GetDriverVersion()
 	if err != nil {
-		os.Stderr.WriteString(fmt.Sprintf("nvml.GetDriverVersion() failed: %v\n", err))
+		fmt.Fprintf(os.Stderr, "nvml.GetDriverVersion() failed: %v\n", err)
 		return false
 	}
 
-	os.Stderr.WriteString(fmt.Sprintf("Nvidia driver version: %v\n", driverVersion))
+	fmt.Fprintf(os.Stderr, "Nvidia driver version: %v\n", driverVersion)
 
 	for i := uint(0); i < count; i++ {
 		device, err := nvml.NewDevice(i)
 		if err != nil {
-			log.Fatalf("Error getting device %d: %v\n", i, err)
+			fmt.Fprintf(os.Stderr, "Error getting device %d: %v\n", i, err)
+			os.Exit(1)
 		}
 
-		os.Stderr.WriteString(fmt.Sprintf("GPU %v: Path: %v, Model: %v, UUID: %v, CudaComputeCapability: %v.%v\n",
-			i, device.Path, *device.Model, device.UUID, device.CudaComputeCapability.Major, device.CudaComputeCapability.Minor))
+		fmt.Fprintf(os.Stderr, "GPU %v: Path: %v, Model: %v, UUID: %v, CudaComputeCapability: %v.%v\n",
+			i, device.Path, *device.Model, device.UUID, device.CudaComputeCapability.Major, device.CudaComputeCapability.Minor)
 	}
 
 	if count > 0 {
 		return true
 	} else {
-		os.Stderr.WriteString(fmt.Sprintf("No nvidia gpu(s) detected\n"))
+		fmt.Fprintf(os.Stderr, "No nvidia gpu(s) detected\n")
 		return false
 	}
 }
@@ -118,7 +118,7 @@ func generateLdPreload(existingLdPreload string) string {
 func main() {
 
 	if len(os.Args) < 2 {
-		os.Stderr.WriteString(fmt.Sprintf("Usage: %v <command> [args...]\n", os.Args[0]))
+		fmt.Fprintf(os.Stderr, "Usage: %v <command> [args...]\n", os.Args[0])
 		return
 	}
 
@@ -147,18 +147,20 @@ func main() {
 		var err error
 		binary, err = exec.LookPath(binary)
 		if err != nil {
-			log.Fatalf("exec.LookPath() failed: %v", err)
+			fmt.Fprintf(os.Stderr, "exec.LookPath() failed: %v", err)
+			os.Exit(1)
 		}
 	}
 
 	args := os.Args[1:]
 
-	os.Stderr.WriteString(fmt.Sprintf("Setting %v\n", ldPreload))
+	fmt.Fprintf(os.Stderr, "Setting %v\n", ldPreload)
 
-	os.Stderr.WriteString(fmt.Sprintf("Executing %v\n", args))
+	fmt.Fprintf(os.Stderr, "Executing %v\n", args)
 
 	err := syscall.Exec(binary, args, env)
 	if err != nil {
-		log.Fatalf("syscall.Exec() failed: %v", err)
+		fmt.Fprintf(os.Stderr, "syscall.Exec() failed: %v", err)
+		os.Exit(1)
 	}
 }
