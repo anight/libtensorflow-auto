@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/anight/gpu-monitoring-tools/bindings/go/nvml"
-	"github.com/intel-go/cpuid"
 	"os"
 	"os/exec"
 	"path"
@@ -14,39 +12,7 @@ import (
 var tensorflow_root = "/local/tensorflow/lib"
 
 func getLibtensorflowCpuSuffix() string {
-	if cpuid.EnabledAVX512 {
-		/*
-		   From man gcc-6:
-
-		   skylake-avx512
-		       Intel Skylake Server CPU with 64-bit extensions, MOVBE, MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, PKU, AVX, AVX2, AES, PCLMUL,
-		       FSGSBASE, RDRND, FMA, BMI, BMI2, F16C, RDSEED, ADCX, PREFETCHW, CLFLUSHOPT, XSAVEC, XSAVES, AVX512F, AVX512VL, AVX512BW, AVX512DQ and AVX512CD
-		       instruction set support.
-		*/
-		if cpuid.HasExtendedFeature(cpuid.AVX512F) &&
-			cpuid.HasExtendedFeature(cpuid.AVX512VL) &&
-			cpuid.HasExtendedFeature(cpuid.AVX512BW) &&
-			cpuid.HasExtendedFeature(cpuid.AVX512DQ) &&
-			cpuid.HasExtendedFeature(cpuid.AVX512CD) {
-
-			return "avx512"
-		}
-	}
-
-	if cpuid.EnabledAVX {
-		if cpuid.HasExtendedFeature(cpuid.AVX2) {
-			return "avx2_fma"
-		}
-		if cpuid.HasFeature(cpuid.AVX) {
-			return "avx"
-		}
-	}
-
-	if cpuid.HasFeature(cpuid.SSE4_2) {
-		return "sse42"
-	}
-
-	panic("what a funny cpu you have")
+	return currentCpu().vectorFeatureSetBase
 }
 
 func haveLibtensorflowGpuSo() bool {
@@ -60,50 +26,9 @@ func haveLibtensorflowGpuSo() bool {
 	}
 }
 
-func listGPUs() (ret []*nvml.Device) {
-	if err := nvml.Init(); err != nil {
-		fmt.Fprintf(os.Stderr, "nvml.Init() failed: %v\n", err)
-		return
-	}
-	defer nvml.Shutdown()
-
-	count, err := nvml.GetDeviceCount()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "nvml.GetDeviceCount() failed: %v\n", err)
-		return
-	}
-
-	driverVersion, err := nvml.GetDriverVersion()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "nvml.GetDriverVersion() failed: %v\n", err)
-		return
-	}
-
-	fmt.Fprintf(os.Stderr, "Nvidia driver version: %v\n", driverVersion)
-
-	for i := uint(0); i < count; i++ {
-		device, err := nvml.NewDevice(i)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error getting device %d: %v\n", i, err)
-			os.Exit(1)
-		}
-
-		ret = append(ret, device)
-
-		fmt.Fprintf(os.Stderr, "GPU %v: Path: %v, Model: %v, UUID: %v, CudaComputeCapability: %v.%v\n",
-			i, device.Path, *device.Model, device.UUID, device.CudaComputeCapability.Major, device.CudaComputeCapability.Minor)
-	}
-
-	if count == 0 {
-		fmt.Fprintf(os.Stderr, "No nvidia gpu(s) detected\n")
-	}
-
-	return
-}
-
 func generateLdPreload(existingLdPreload string) string {
 	var lib string
-	if len(listGPUs()) > 0 && haveLibtensorflowGpuSo() {
+	if len(gpuList) > 0 && haveLibtensorflowGpuSo() {
 		// XXX: With libtensorflow_gpu.so we don't do cpu features matching for now
 		// XXX: With libtensorflow_gpu.so we don't do gpu cuda capabilities matching for now
 		lib = fmt.Sprintf("LD_PRELOAD=%v/libtensorflow_gpu.so", tensorflow_root)
@@ -122,6 +47,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Usage: %v <command> [args...]\n", os.Args[0])
 		return
 	}
+
+	cpuInit()
+
+	gpuInit()
 
 	env := os.Environ()
 
