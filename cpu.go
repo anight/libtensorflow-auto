@@ -118,14 +118,6 @@ func (c cpu) cpuWarnIfUnsupportedTensorflowFeatures() {
 	}
 }
 
-func (c cpu) Priority() int {
-	features := currentCpu().allFeaturesCount() - c.allFeaturesCount()
-	if features < 0 {
-		return 1000
-	}
-	return features
-}
-
 func cpuParse(name string) (cpu, error) {
 	for _, v := range allCPUs {
 		if v.gccName == name || v.alias == name {
