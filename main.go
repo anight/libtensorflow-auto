@@ -79,12 +79,12 @@ func scanLibtensorflowSo() (ret []libtensorflowSoType) {
 		if 0 != (f.Mode() & os.ModeSymlink) {
 			continue
 		}
-		libteosorflowSo, err := parseLibtensorflowSoFilename(f.Name())
+		libtensorflowSo, err := parseLibtensorflowSoFilename(f.Name())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "ignoring file %s: %v\n", f.Name(), err)
 			continue
 		}
-		ret = append(ret, libteosorflowSo)
+		ret = append(ret, libtensorflowSo)
 	}
 	return
 }
