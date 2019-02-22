@@ -97,7 +97,9 @@ func (c cpu) allFeaturesSupported() bool {
 
 func (c cpu) cpuTensorflowFeatures() (tensorflowFeatures []string) {
 	for _, tf := range cpuTensorflowFeatures {
-		if 0 != (tf.c.features&c.features) || 0 != (tf.c.extendedFeatures&c.extendedFeatures) || 0 != (tf.c.extraFeatures&c.extraFeatures) {
+		if tf.c.features == (tf.c.features&c.features) &&
+			tf.c.extendedFeatures == (tf.c.extendedFeatures&c.extendedFeatures) &&
+			tf.c.extraFeatures == (tf.c.extraFeatures&c.extraFeatures) {
 			tensorflowFeatures = append(tensorflowFeatures, tf.feature)
 		}
 	}
