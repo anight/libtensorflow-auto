@@ -168,6 +168,8 @@ func main() {
 		env = append(env, ldPreload)
 	}
 
+	env = append(env, "CUDA_DEVICE_ORDER=PCI_BUS_ID")
+
 	binary := os.Args[1]
 
 	if path.Base(binary) == binary {
